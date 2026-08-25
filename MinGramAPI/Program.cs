@@ -430,6 +430,7 @@ bool HarBehorighet(
 
 
         // Fotograf and Admin can upload
+        // makes Fotograf and Admin equivalent when the endpoint only requires Fotograf permission
         ("Fotograf" or "Admin", "Fotograf")
             => true,
 

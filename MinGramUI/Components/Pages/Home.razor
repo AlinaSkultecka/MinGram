@@ -281,90 +281,31 @@ else
                 HttpClientFactory
                     .CreateClient("MinGramApi");
 
+            var taggLista = taggar
+            .Split(
+                ',',
+                StringSplitOptions.RemoveEmptyEntries
+            )
+            .Select(t => t.Trim())
+            .ToList();
 
-            // Create multipart/form-data content
-            using var content =
-                new MultipartFormDataContent();
+            var nyBild = new
+            {
+                Namn = valdFil.Name,
+                Caption = caption,
+                Taggar = taggLista,
 
-
-            // Maximum allowed image size: 10 MB
-            var stream =
-                valdFil.OpenReadStream(
-                    maxAllowedSize:
-                    10 * 1024 * 1024
-                );
-
-
-            var fileContent =
-                new StreamContent(stream);
-
-
-            // Set image content type
-            fileContent.Headers.ContentType =
-                new System.Net.Http.Headers
-                    .MediaTypeHeaderValue(
-                        valdFil.ContentType
-                    );
-
-
-            // --------------------------------------------------
-            // Image file
-            // --------------------------------------------------
-            //
-            // "file" must match this in the API:
-            //
-            // form.Files.GetFile("file")
-            //
-
-            content.Add(
-                fileContent,
-                "file",
-                valdFil.Name
-            );
-
-
-            // --------------------------------------------------
-            // Title
-            // --------------------------------------------------
-
-            content.Add(
-                new StringContent(titel),
-                "titel"
-            );
-
-
-            // --------------------------------------------------
-            // Caption
-            // --------------------------------------------------
-
-            content.Add(
-                new StringContent(caption),
-                "caption"
-            );
-
-
-            // --------------------------------------------------
-            // Tags
-            // --------------------------------------------------
-
-            content.Add(
-                new StringContent(taggar),
-                "taggar"
-            );
-
-
-            // --------------------------------------------------
-            // Send POST request to API
-            // --------------------------------------------------
+                // Temporary URL for local testing.
+                // Later, replace this with the real Azure Blob Storage URL.
+                Url = $"https://placehold.co/600x400?text={Uri.EscapeDataString(titel)}"
+            };
 
             var response =
-                await client.PostAsync(
+                await client.PostAsJsonAsync(
                     "/bilder",
-                    content
+                    nyBild
                 );
 
-
-            // Check if upload failed
             if (!response.IsSuccessStatusCode)
             {
                 felmeddelande =
@@ -373,21 +314,11 @@ else
                 return;
             }
 
-
-            // --------------------------------------------------
-            // Clear form after successful upload
-            // --------------------------------------------------
-
             valdFil = null;
-
             titel = "";
-
             caption = "";
-
             taggar = "";
 
-
-            // Reload images so the new picture appears
             await HamtaBilder();
         }
         catch (Exception ex)

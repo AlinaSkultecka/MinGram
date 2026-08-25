@@ -1,0 +1,73 @@
+name: Deploy MinGram to Azure App Service
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '10.0.x'
+
+jobs:
+  deploy-api:
+    runs-on: ubuntu-latest
+    env:
+      AZURE_WEBAPP_NAME: hisingen-mingram-api
+      AZURE_WEBAPP_PACKAGE_PATH: './publish-api'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore MinGramAPI/MinGramAPI.csproj
+
+      - name: Build
+        run: dotnet build MinGramAPI/MinGramAPI.csproj --configuration Release --no-restore
+
+      - name: Publish
+        run: dotnet publish MinGramAPI/MinGramAPI.csproj --configuration Release --no-build --output ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+
+  deploy-ui:
+    runs-on: ubuntu-latest
+    env:
+      AZURE_WEBAPP_NAME: hisingen-mingram-ui
+      AZURE_WEBAPP_PACKAGE_PATH: './publish-ui'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore MinGramUI/MinGramUI.csproj
+
+      - name: Build
+        run: dotnet build MinGramUI/MinGramUI.csproj --configuration Release --no-restore
+
+      - name: Publish
+        run: dotnet publish MinGramUI/MinGramUI.csproj --configuration Release --no-build --output ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_UI }}
+          package: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}

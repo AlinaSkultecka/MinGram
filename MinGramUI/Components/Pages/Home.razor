@@ -1,0 +1,636 @@
+﻿@page "/"
+
+@inject IHttpClientFactory HttpClientFactory
+@inject ILogger<Home> Logger
+
+@rendermode InteractiveServer
+
+
+<h2>Bilder</h2>
+
+
+@if (laddar)
+{
+    <p>Hämtar bilder...</p>
+}
+else if (bilder.Count == 0)
+{
+    <p>Inga bilder ännu. Ladda upp den första!</p>
+}
+else
+{
+    <div class="bildgalleri">
+
+        @foreach (var bild in bilder)
+        {
+            <div class="bildkort">
+
+                <img src="@bild.Url"
+                     alt="@bild.Caption" />
+
+                <div class="bildinfo">
+
+                    @* Picture title *@
+                    <h3 class="bildtitel">
+                        @bild.Titel
+                    </h3>
+
+                    @* Picture description *@
+                    <p class="caption">
+                        @bild.Caption
+                    </p>
+
+                    @* Picture tags *@
+                    <p class="taggar">
+                        @string.Join(
+                            " · ",
+                            bild.Taggar.Select(t => $"#{t}")
+                        )
+                    </p>
+
+                    @* Original filename *@
+                    <p class="filnamn">
+                        @bild.Namn
+                    </p>
+
+                    <button class="raderaknapp"
+                            @onclick="() => RaderaBild(bild.Id)">
+                        Ta bort
+                    </button>
+
+                </div>
+
+            </div>
+        }
+
+    </div>
+}
+
+
+<hr />
+
+
+<h2>Ladda upp bild</h2>
+
+
+<div class="uppladdningsformular">
+
+    @* Select image from computer *@
+    <div class="falt">
+
+        <label>Bild</label>
+
+        <InputFile OnChange="FilVald"
+                   accept="image/*" />
+
+    </div>
+
+
+    @* Show selected filename *@
+    @if (valdFil is not null)
+    {
+        <p class="valdfil">
+            Vald fil:
+            <strong>@valdFil.Name</strong>
+        </p>
+    }
+
+
+    @* Picture title *@
+    <div class="falt">
+
+        <label>Titel</label>
+
+        <input type="text"
+               @bind="titel"
+               placeholder="Skriv bildens titel..." />
+
+    </div>
+
+
+    @* Picture description *@
+    <div class="falt">
+
+        <label>Caption</label>
+
+        <input type="text"
+               @bind="caption"
+               placeholder="Beskriv bilden..." />
+
+    </div>
+
+
+    @* Tags separated by commas *@
+    <div class="falt">
+
+        <label>Taggar</label>
+
+        <input type="text"
+               @bind="taggar"
+               placeholder="semester, strand, sol" />
+
+    </div>
+
+
+    <button @onclick="LaddaUpp"
+            disabled="@(valdFil is null)">
+
+        Ladda upp
+
+    </button>
+
+
+    @if (!string.IsNullOrEmpty(felmeddelande))
+    {
+        <p class="fel">
+            @felmeddelande
+        </p>
+    }
+
+</div>
+
+
+@code {
+
+    // ==================================================
+    // VARIABLES
+    // ==================================================
+
+    private List<Bild> bilder = new();
+
+    private bool laddar = true;
+
+    private string titel = "";
+
+    private string caption = "";
+
+    private string taggar = "";
+
+    private string felmeddelande = "";
+
+    private IBrowserFile? valdFil;
+
+
+    // ==================================================
+    // PAGE START
+    // ==================================================
+
+    protected override async Task OnInitializedAsync()
+    {
+        await HamtaBilder();
+    }
+
+
+    // ==================================================
+    // GET /bilder
+    // ==================================================
+    //
+    // Gets all images from MinGramAPI.
+    // ==================================================
+
+    private async Task HamtaBilder()
+    {
+        laddar = true;
+
+        try
+        {
+            var client =
+                HttpClientFactory
+                    .CreateClient("MinGramApi");
+
+
+            bilder =
+                await client
+                    .GetFromJsonAsync<List<Bild>>(
+                        "/bilder"
+                    )
+                ?? [];
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(
+                ex,
+                "Could not get images"
+            );
+
+            felmeddelande =
+                "Kunde inte kontakta API:t.";
+        }
+        finally
+        {
+            laddar = false;
+        }
+    }
+
+
+    // ==================================================
+    // FILE SELECTED
+    // ==================================================
+    //
+    // Called when the user chooses a picture
+    // from the computer.
+    // ==================================================
+
+    private void FilVald(
+        InputFileChangeEventArgs e)
+    {
+        valdFil = e.File;
+
+        felmeddelande = "";
+    }
+
+
+    // ==================================================
+    // POST /bilder
+    // ==================================================
+    //
+    // Sends:
+    //
+    // - image file
+    // - title
+    // - caption
+    // - tags
+    //
+    // to MinGramAPI using multipart/form-data.
+    // ==================================================
+
+    private async Task LaddaUpp()
+    {
+        if (valdFil is null)
+        {
+            return;
+        }
+
+
+        felmeddelande = "";
+
+
+        // Require a title
+        if (string.IsNullOrWhiteSpace(titel))
+        {
+            felmeddelande =
+                "Du måste skriva en titel.";
+
+            return;
+        }
+
+
+        try
+        {
+            var client =
+                HttpClientFactory
+                    .CreateClient("MinGramApi");
+
+
+            // Create multipart/form-data content
+            using var content =
+                new MultipartFormDataContent();
+
+
+            // Maximum allowed image size: 10 MB
+            var stream =
+                valdFil.OpenReadStream(
+                    maxAllowedSize:
+                    10 * 1024 * 1024
+                );
+
+
+            var fileContent =
+                new StreamContent(stream);
+
+
+            // Set image content type
+            fileContent.Headers.ContentType =
+                new System.Net.Http.Headers
+                    .MediaTypeHeaderValue(
+                        valdFil.ContentType
+                    );
+
+
+            // --------------------------------------------------
+            // Image file
+            // --------------------------------------------------
+            //
+            // "file" must match this in the API:
+            //
+            // form.Files.GetFile("file")
+            //
+
+            content.Add(
+                fileContent,
+                "file",
+                valdFil.Name
+            );
+
+
+            // --------------------------------------------------
+            // Title
+            // --------------------------------------------------
+
+            content.Add(
+                new StringContent(titel),
+                "titel"
+            );
+
+
+            // --------------------------------------------------
+            // Caption
+            // --------------------------------------------------
+
+            content.Add(
+                new StringContent(caption),
+                "caption"
+            );
+
+
+            // --------------------------------------------------
+            // Tags
+            // --------------------------------------------------
+
+            content.Add(
+                new StringContent(taggar),
+                "taggar"
+            );
+
+
+            // --------------------------------------------------
+            // Send POST request to API
+            // --------------------------------------------------
+
+            var response =
+                await client.PostAsync(
+                    "/bilder",
+                    content
+                );
+
+
+            // Check if upload failed
+            if (!response.IsSuccessStatusCode)
+            {
+                felmeddelande =
+                    $"Uppladdningen misslyckades. Status: {(int)response.StatusCode}";
+
+                return;
+            }
+
+
+            // --------------------------------------------------
+            // Clear form after successful upload
+            // --------------------------------------------------
+
+            valdFil = null;
+
+            titel = "";
+
+            caption = "";
+
+            taggar = "";
+
+
+            // Reload images so the new picture appears
+            await HamtaBilder();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(
+                ex,
+                "Image upload failed"
+            );
+
+            felmeddelande =
+                "Kunde inte ladda upp bilden.";
+        }
+    }
+
+
+    // ==================================================
+    // DELETE /bilder/{id}
+    // ==================================================
+    //
+    // Deletes an image using its ID.
+    // ==================================================
+
+    private async Task RaderaBild(int id)
+    {
+        felmeddelande = "";
+
+        try
+        {
+            var client =
+                HttpClientFactory
+                    .CreateClient("MinGramApi");
+
+
+            var response =
+                await client.DeleteAsync(
+                    $"/bilder/{id}"
+                );
+
+
+            if (!response.IsSuccessStatusCode)
+            {
+                felmeddelande =
+                    $"Kunde inte ta bort bilden. Status: {(int)response.StatusCode}";
+
+                return;
+            }
+
+
+            // Reload images after delete
+            await HamtaBilder();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(
+                ex,
+                "Could not delete image"
+            );
+
+            felmeddelande =
+                "Kunde inte kontakta API:t.";
+        }
+    }
+
+
+    // ==================================================
+    // IMAGE MODEL
+    // ==================================================
+    //
+    // This must match the Bild model in MinGramAPI.
+    // ==================================================
+
+    private record Bild(
+        int Id,
+        string Namn,
+        string Titel,
+        string Caption,
+        List<string> Taggar,
+        string Url
+    );
+}
+
+
+<style>
+
+    h2 {
+        margin: 1.5rem 0 1rem;
+        font-size: 1.2rem;
+        color: #555;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+
+    hr {
+        border: none;
+        border-top: 1px solid #eee;
+        margin: 2rem 0;
+    }
+
+
+    /* ==============================
+           IMAGE GALLERY
+           ============================== */
+
+    .bildgalleri {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 1rem;
+    }
+
+
+    .bildkort {
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+
+
+        .bildkort img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            display: block;
+        }
+
+
+    .bildinfo {
+        padding: 0.75rem;
+    }
+
+
+    /* Picture title */
+    .bildtitel {
+        font-weight: 700;
+        font-size: 1.1rem;
+        margin-bottom: 0.35rem;
+        color: #262626;
+    }
+
+
+    /* Picture description */
+    .caption {
+        margin-bottom: 0.35rem;
+        color: #444;
+    }
+
+
+    /* Tags */
+    .taggar {
+        font-size: 0.8rem;
+        color: #3897f0;
+        margin-bottom: 0.5rem;
+    }
+
+
+    /* Original filename */
+    .filnamn {
+        font-size: 0.75rem;
+        color: #777;
+        margin-bottom: 0.75rem;
+    }
+
+
+    /* ==============================
+           DELETE BUTTON
+           ============================== */
+
+    .raderaknapp {
+        background: none;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        padding: 0.3rem 0.75rem;
+        cursor: pointer;
+        color: #e53935;
+        font-size: 0.8rem;
+    }
+
+
+        .raderaknapp:hover {
+            background: #ffeaea;
+        }
+
+
+    /* ==============================
+           UPLOAD FORM
+           ============================== */
+
+    .uppladdningsformular {
+        max-width: 500px;
+    }
+
+
+    .falt {
+        margin-bottom: 1rem;
+    }
+
+
+        .falt label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.35rem;
+        }
+
+
+        .falt input {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #dbdbdb;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+
+
+    .valdfil {
+        margin-bottom: 1rem;
+        font-size: 0.9rem;
+        color: #555;
+    }
+
+
+    .uppladdningsformular button {
+        background: linear-gradient( 135deg, #833ab4, #fd1d1d, #fcb045 );
+        color: white;
+        border: none;
+        padding: 0.6rem 1.5rem;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 1rem;
+    }
+
+
+    button[disabled] {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+
+    /* Error message */
+    .fel {
+        color: #e53935;
+        margin-top: 0.5rem;
+        font-size: 0.9rem;
+    }
+
+</style>

@@ -1,0 +1,10 @@
+﻿@* Routes.razor — hanterar navigering i appen
+   Blazor mappar automatiskt URL:er till sidor via @page-direktivet i varje komponent *@
+
+<Router AppAssembly="typeof(Program).Assembly">
+    <Found Context="routeData">
+        @* Visar rätt layout runt varje sida *@
+        <RouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)" />
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+</Router>

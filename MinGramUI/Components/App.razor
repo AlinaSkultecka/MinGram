@@ -1,0 +1,19 @@
+﻿@* App.razor — rotkomponenten för hela Blazor-appen
+   Den här filen rör du normalt inte — den sätter upp routing och HTML-skelett *@
+
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MinGram</title>
+    <base href="/" />
+</head>
+<body>
+    @* Routes avgör vilken .razor-sida som visas baserat på URL:en *@
+    <Routes />
+
+    @* Blazors JavaScript — krävs för att interaktiviteten ska fungera *@
+    <script src="_framework/blazor.web.js"></script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="MinGramAPI/MinGramAPI.csproj" />
+  <Project Path="MinGramUI/MinGramUI.csproj" />
+</Solution>

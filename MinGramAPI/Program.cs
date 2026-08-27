@@ -23,6 +23,8 @@
 
 using System.Text;
 using System.Text.Json;
+using Azure.Storage.Blobs;
+
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -53,6 +55,20 @@ builder.Services.AddCors(options =>
             .AllowAnyMethod();
     });
 });
+
+//Blob
+
+var blobConnectionString =
+    Environment.GetEnvironmentVariable("BLOB_STORAGE_CONNECTION_STRING");
+
+if (string.IsNullOrWhiteSpace(blobConnectionString))
+{
+    throw new InvalidOperationException(
+        "BLOB_STORAGE_CONNECTION_STRING is not configured.");
+}
+
+builder.Services.AddSingleton(
+    new BlobServiceClient(blobConnectionString));
 
 
 var app = builder.Build();
@@ -161,41 +177,53 @@ app.MapGet("/bilder/{id:int}", (int id) =>
 // The Blob URL is then sent to this endpoint.
 // ======================================================
 
-
-app.MapPost("/bilder", (
-    NyBild nyBild,
-    HttpRequest request) =>
+app.MapPost("/bilder", async (
+    IFormFile fil,
+    string titel,
+    string caption,
+    string? taggar,
+    HttpRequest request,
+    BlobServiceClient blobServiceClient) =>
 {
     var roll = HamtaRoll(request);
-
 
     if (!HarBehorighet(roll, "Fotograf"))
     {
         return Results.StatusCode(403);
     }
 
+    var containerClient = blobServiceClient.GetBlobContainerClient("bilder");
+    await containerClient.CreateIfNotExistsAsync();
+
+    var blobNamn = $"{Guid.NewGuid()}{Path.GetExtension(fil.FileName)}";
+    var blobClient = containerClient.GetBlobClient(blobNamn);
+
+    await using (var stream = fil.OpenReadStream())
+    {
+        await blobClient.UploadAsync(stream, overwrite: true);
+    }
+
+    var taggLista = (taggar ?? "")
+        .Split(',', StringSplitOptions.RemoveEmptyEntries)
+        .Select(t => t.Trim())
+        .ToList();
 
     var bild = new Bild(
         nastaBildId++,
-        nyBild.Namn,
-        nyBild.Titel,
-        nyBild.Caption,
-        nyBild.Taggar ?? [],
-        nyBild.Url
+        fil.FileName,
+        titel,
+        caption,
+        taggLista,
+        blobClient.Uri.ToString()
     );
-
 
     bilder.Add(bild);
 
-
-    return Results.Created(
-        $"/bilder/{bild.Id}",
-        bild
-    );
+    return Results.Created($"/bilder/{bild.Id}", bild);
 })
 .WithName("LaddaUppBild")
-.WithSummary("Add image - requires Fotograf or Admin");
-
+.WithSummary("Add image - requires Fotograf or Admin")
+.DisableAntiforgery();
 
 // ======================================================
 // 7. PUT /bilder/{id}

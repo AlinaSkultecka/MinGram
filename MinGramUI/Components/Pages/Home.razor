@@ -261,56 +261,36 @@ else
             return;
         }
 
-
         felmeddelande = "";
 
-
-        // Require a title
         if (string.IsNullOrWhiteSpace(titel))
         {
-            felmeddelande =
-                "Du måste skriva en titel.";
-
+            felmeddelande = "Du måste skriva en titel.";
             return;
         }
 
-
         try
         {
-            var client =
-                HttpClientFactory
-                    .CreateClient("MinGramApi");
+            var client = HttpClientFactory.CreateClient("MinGramApi");
 
-            var taggLista = taggar
-            .Split(
-                ',',
-                StringSplitOptions.RemoveEmptyEntries
-            )
-            .Select(t => t.Trim())
-            .ToList();
+            using var content = new MultipartFormDataContent();
 
-            var nyBild = new
-            {
-                Namn = valdFil.Name,
-                Caption = caption,
-                Taggar = taggLista,
+            await using var stream = valdFil.OpenReadStream(maxAllowedSize: 10_000_000);
+            var fileContent = new StreamContent(stream);
+            fileContent.Headers.ContentType =
+                new System.Net.Http.Headers.MediaTypeHeaderValue(valdFil.ContentType);
 
-                // Temporary URL for local testing.
-                // Later, replace this with the real Azure Blob Storage URL.
-                Url = $"https://placehold.co/600x400?text={Uri.EscapeDataString(titel)}"
-            };
+            content.Add(fileContent, "fil", valdFil.Name);
+            content.Add(new StringContent(titel), "titel");
+            content.Add(new StringContent(caption ?? ""), "caption");
+            content.Add(new StringContent(taggar ?? ""), "taggar");
 
-            var response =
-                await client.PostAsJsonAsync(
-                    "/bilder",
-                    nyBild
-                );
+            var response = await client.PostAsync("/bilder", content);
 
             if (!response.IsSuccessStatusCode)
             {
                 felmeddelande =
                     $"Uppladdningen misslyckades. Status: {(int)response.StatusCode}";
-
                 return;
             }
 
@@ -323,13 +303,8 @@ else
         }
         catch (Exception ex)
         {
-            Logger.LogError(
-                ex,
-                "Image upload failed"
-            );
-
-            felmeddelande =
-                "Kunde inte ladda upp bilden.";
+            Logger.LogError(ex, "Image upload failed");
+            felmeddelande = "Kunde inte ladda upp bilden.";
         }
     }
 

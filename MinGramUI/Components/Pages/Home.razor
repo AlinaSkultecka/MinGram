@@ -289,8 +289,16 @@ else
 
             if (!response.IsSuccessStatusCode)
             {
+                var error = await response.Content.ReadAsStringAsync();
+
+                Logger.LogError(
+                    "Upload failed. Status: {Status}. Response: {Response}",
+                    response.StatusCode,
+                    error);
+
                 felmeddelande =
-                    $"Uppladdningen misslyckades. Status: {(int)response.StatusCode}";
+                    $"Uppladdningen misslyckades. Status: {(int)response.StatusCode}. {error}";
+
                 return;
             }
 

@@ -24,6 +24,7 @@
 using System.Text;
 using System.Text.Json;
 using Azure.Storage.Blobs;
+using Microsoft.AspNetCore.Mvc;
 
 
 
@@ -72,7 +73,6 @@ builder.Services.AddSingleton(
 
 
 var app = builder.Build();
-
 
 // ======================================================
 // 2. HTTP PIPELINE
@@ -179,9 +179,9 @@ app.MapGet("/bilder/{id:int}", (int id) =>
 
 app.MapPost("/bilder", async (
     IFormFile fil,
-    string titel,
-    string caption,
-    string? taggar,
+    [FromForm] string titel,
+    [FromForm] string caption,
+    [FromForm] string? taggar,
     HttpRequest request,
     BlobServiceClient blobServiceClient) =>
 {

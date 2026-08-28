@@ -178,7 +178,7 @@ app.MapGet("/bilder/{id:int}", (int id) =>
 // ======================================================
 
 app.MapPost("/bilder", async (
-    [FromForm] IFormFile fil,
+    IFormFile fil,
     [FromForm] string titel,
     [FromForm] string caption,
     [FromForm] string? taggar,
